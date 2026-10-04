@@ -4,8 +4,8 @@
 
 ```bash
 pkg install python clang make ffmpeg
-git clone https://github.com/rendi-afkar/youtube-downloader-termux.git
-cd youtube-downloader-termux
+git clone https://github.com/rendi-afkar/autodownloadyoutube.git
+cd autodownloadyoutube
 make
 ./main
 ```
