@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 from cryptography.exceptions import InvalidSignature
@@ -324,7 +325,8 @@ def show_menu():
         ("2", "SCRAPE", "channel -> CSV"),
         ("3", "LICENSE", "aktivasi / cek"),
         ("4", "SETTINGS", "folder & nama"),
-        ("5", "EXIT", ""),
+        ("5", "UPDATE", "cek versi GitHub"),
+        ("6", "EXIT", ""),
     ]
 
     rows = []
@@ -1556,6 +1558,88 @@ def do_tiktok_compatible(output_dir):
             dest.unlink()
 
 
+
+def check_update():
+    """Periksa pembaruan core.py dari repositori resmi."""
+    url = (
+        "https://raw.githubusercontent.com/"
+        "rendi-afkar/autodownloadyoutube/main/lib/core.py"
+    )
+
+    print()
+    print("[*] Memeriksa pembaruan GitHub...")
+
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "AFKAR-YouTube-Updater"}
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            remote_bytes = response.read()
+
+        remote = remote_bytes.decode("utf-8")
+
+        # Jangan memasang versi yang belum memiliki fitur updater.
+        if (
+            "def check_update():" not in remote
+            or '"UPDATE"' not in remote
+            or "def main():" not in remote
+            or "def show_menu():" not in remote
+        ):
+            print("[X] Versi GitHub belum mendukung updater.")
+            print("[!] Tidak ada file lokal yang diubah.")
+            print("[i] Push versi yang sudah dilengkapi updater ke GitHub.")
+            return
+
+        local_path = Path(__file__).resolve()
+        local_bytes = local_path.read_bytes()
+
+        if remote_bytes == local_bytes:
+            print("[OK] Program sudah sama dengan versi GitHub.")
+            return
+
+        # Validasi sintaks sebelum meminta konfirmasi.
+        compile(remote, str(local_path), "exec")
+
+        print("[!] Pembaruan core.py tersedia.")
+        confirm = input("Pasang update sekarang? (y/n): ").strip().lower()
+
+        if confirm not in ("y", "ya"):
+            print("[i] Update dibatalkan.")
+            return
+
+        backup = local_path.with_name(
+            "core.py.backup-update-" +
+            datetime.now().strftime("%Y%m%d-%H%M%S")
+        )
+        temp_path = local_path.with_name("core.py.update.tmp")
+
+        try:
+            shutil.copy2(local_path, backup)
+            temp_path.write_bytes(remote_bytes)
+            temp_path.chmod(local_path.stat().st_mode)
+
+            # Validasi ulang file sementara, lalu ganti secara atomik.
+            compile(temp_path.read_text(encoding="utf-8"),
+                    str(local_path), "exec")
+            os.replace(temp_path, local_path)
+
+            print("[OK] Update berhasil dipasang.")
+            print("[OK] Cadangan program:", backup.name)
+            print("[i] Lisensi dan data pengguna tidak dihapus.")
+            print("[i] Mulai ulang ./main untuk menjalankan versi baru.")
+
+        except Exception:
+            if temp_path.exists():
+                temp_path.unlink()
+            print("[X] Update gagal. File program lama dipertahankan.")
+            raise
+
+    except Exception as exc:
+        print("[X] Gagal memeriksa/memasang update:", str(exc))
+        print("[i] Periksa koneksi internet dan coba lagi.")
+
+
 def main():
     output_dir = DEFAULT_OUTPUT
 
@@ -1612,7 +1696,12 @@ def main():
             pause()
             net = boot_sequence()
 
-        elif choice in ("5", "6", "0", "q", "exit", "keluar"):
+        elif choice in ("5", "update", "check update"):
+            check_update()
+            pause()
+            net = boot_sequence()
+
+        elif choice in ("6", "0", "q", "exit", "keluar"):
             print()
             print("[OK] Sesi ditutup. Sampai jumpa.")
             return
